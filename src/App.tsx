@@ -106,15 +106,19 @@ function PlayerPage() {
 
     return (
         <div id={"container"}>
-            <h1 id={"title"}>CHAMELEON</h1>
-            <div>
-                {shouldDisplay && <PlayerNameDisplay name={playerName.name}/>}
-                {shouldDisplay && <SignOutPlayerButton callback={clearName}/>}
-                {!shouldDisplay && <PlayerNameSubmitButton callback={handleClick}/>}
-                {shouldDisplayRoom && <RoomDisplay roomID={roomID.roomID}/>}
-                {shouldDisplayCreateRoom && <CreateRoomButton callback={createRoomRequest}/>}
-                {shouldDisplayJoinRoom && <JoinRoom callback={createRoomRequest}/>}
-                <WordEntries words={words} secret_word={"Beef"} is_chameleon={true}/>
+            <div id={"name-container"}>
+                <h1 id={"title"}>CHACHAMELEON</h1>
+                <div>
+                    <div style={{"display": "flex", "flexDirection": "row", "justifyContent": "space-between"}}>
+                        {shouldDisplay && <PlayerNameDisplay name={playerName.name}/>}
+                        {!shouldDisplay && <PlayerNameSubmitButton callback={handleClick}/>}
+                        {shouldDisplayRoom && <RoomDisplay roomID={roomID.roomID}/>}
+                    </div>
+                    {shouldDisplayCreateRoom && <CreateRoomButton callback={createRoomRequest}/>}
+                    {shouldDisplayJoinRoom && <JoinRoom callback={createRoomRequest}/>}
+                    <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/>
+                    {shouldDisplay && <SignOutPlayerButton callback={clearName}/>}
+                </div>
             </div>
         </div>
     );
@@ -126,7 +130,7 @@ interface RoomDisplayProps {
 
 function RoomDisplay(props: RoomDisplayProps) {
     const {roomID} = props;
-    return <h1>ROOM {roomID}</h1>;
+    return <h3>ROOM {roomID}</h3>;
 }
 
 interface CreateRoomProps {
@@ -160,11 +164,11 @@ interface PlayerNameDisplayProps {
 
 function PlayerNameDisplay(props: PlayerNameDisplayProps) {
     const stuff = {
-     fontFamily: "Bradley Hand",
+        fontFamily: "Bradley Hand",
         fontWeight: "20px",
     };
     return (<div>
-        <h1 style={stuff}>{props.name}</h1>
+        <h3 style={stuff}>{props.name}</h3>
     </div>)
 }
 
@@ -197,26 +201,30 @@ interface WordEntriesProp {
     words: Array<string>;
     secret_word: string,
     is_chameleon: boolean,
+    category: string,
 }
 
 function WordEntries(props: WordEntriesProp) {
     let chunks = chunkArray(props.words, 4);
     return (
         <div>
-            <tbody id={"words"}>
-            {chunks.map(row => {
-                return (
-                    <tr>
-                        <td>{row[0]}</td>
-                        <td>{row[1]}</td>
-                        <td>{row[2]}</td>
-                        <td>{row[3]}</td>
-                    </tr>
-                );
-            })}
-            </tbody>
-            {props.secret_word !== "" && <h1>Secret Word: {props.secret_word}</h1>}
-            {props.is_chameleon && <h1>YOU ARE THE CHAMELEON</h1>}
+            <table id={"words-table"}>
+                <caption style={{"color": "#03316d", "fontSize": "30px"}}>{props.category}</caption>
+                <tbody id={"words"}>
+                {chunks.map(row => {
+                    return (
+                        <tr>
+                            <td>{row[0]}</td>
+                            <td>{row[1]}</td>
+                            <td>{row[2]}</td>
+                            <td>{row[3]}</td>
+                        </tr>
+                    );
+                })}
+                </tbody>
+            </table>
+            {props.secret_word !== "" && <h3>Secret Word: {props.secret_word}</h3>}
+            {props.is_chameleon && <h3>YOU ARE THE CHAMELEON</h3>}
         </div>
     )
         ;

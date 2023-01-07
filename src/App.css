@@ -37,15 +37,20 @@
     }
 }
 
-#words {
+#words-table {
     font-family: Arial, Helvetica, sans-serif;
     font-weight: bolder;
+    margin: 0 auto;
+    width: 90%;
+}
+
+#words {
     border-collapse: collapse;
     width: 100%;
     background-color: #FFFFFF;
 }
 
-#words td, #customers th {
+#words td, #words th {
     padding: 8px;
 }
 
@@ -53,10 +58,6 @@
 tr:nth-child(even) td:nth-child(odd),
 tr:nth-child(odd) td:nth-child(even) {
     background-color: #c9ffe5;
-}
-
-#words tr:hover {
-    background-color: #ddd;
 }
 
 #words th {
@@ -69,11 +70,21 @@ tr:nth-child(odd) td:nth-child(even) {
 
 #title {
     color: #04AA6D;
-    font-family: Fantasy;
+    font-family: "Marker Felt";
 }
 
 #container {
     border-color: #282c34;
     border-width: medium;
     background-color: #8be0b6;
+    margin: 0% 25%;
+    height: 100vh;
+}
+
+#name-container {
+    padding: 15px;
+}
+
+#root {
+    background-image: url("images/chacha.png");
 }
