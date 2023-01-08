@@ -116,7 +116,7 @@ function PlayerPage() {
                     </div>
                     {shouldDisplayCreateRoom && <CreateRoomButton callback={createRoomRequest}/>}
                     {shouldDisplayJoinRoom && <JoinRoom callback={createRoomRequest}/>}
-                    <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/>
+                    {shouldDisplayRoom && <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/> }
                     {shouldDisplay && <SignOutPlayerButton callback={clearName}/>}
                 </div>
             </div>
