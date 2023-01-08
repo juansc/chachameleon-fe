@@ -1,6 +1,5 @@
 import './App.css';
 import {useState} from "react";
-import {Simulate} from "react-dom/test-utils";
 
 function App() {
     return (
@@ -23,7 +22,7 @@ const commonURL = "http://localhost:8080";
 function PlayerPage() {
     let playerNameStr = sessionStorage.getItem("playerName") || "";
     let roomIDStr = sessionStorage.getItem("roomID") || "";
-    let roundNumStr = sessionStorage.getItem("roundNum") || "";
+    let roundNumStr = Number(sessionStorage.getItem("roundNum")) || 0;
     console.log("My roundNum is", roundNumStr);
     console.log("My playerName is", playerNameStr);
 
@@ -94,7 +93,7 @@ function PlayerPage() {
         sessionStorage.setItem("roundNum", "");
         setPlayerName({name: ""});
         setRoomID({roomID: ""});
-        setRoundNum({round: ""});
+        setRoundNum({round: 0});
     };
 
     const joinRoom = () => {
@@ -105,12 +104,15 @@ function PlayerPage() {
 
     const playerNameSet = Boolean(playerName.name);
     const roomIDSet = Boolean(roomID.roomID);
+    const roundNumSet = Boolean(roundNum.round);
+
     const playerNotInARoom = playerNameSet && !roomIDSet;
 
-    const shouldDisplay = playerNameSet;
+    const shouldDisplayPlayerName = playerNameSet;
     const shouldDisplayRoom = playerNameSet && roomIDSet;
     const shouldDisplayCreateRoom = playerNotInARoom;
     const shouldDisplayJoinRoom = playerNotInARoom;
+    const shouldDisplayWords = playerNameSet && roomIDSet && roundNumSet;
 
     const words: string[] = [
         "Pizza",
@@ -133,6 +135,7 @@ function PlayerPage() {
         "Chocolate",
         "Beef",
     ];
+    console.log("Can I display room", shouldDisplayRoom);
 
     return (
         <div id={"container"}>
@@ -140,14 +143,16 @@ function PlayerPage() {
                 <h1 id={"title"}>CHACHAMELEON</h1>
                 <div>
                     <div style={{"display": "flex", "flexDirection": "row", "justifyContent": "space-between"}}>
-                        {shouldDisplay && <PlayerNameDisplay name={playerName.name}/>}
-                        {!shouldDisplay && <PlayerNameSubmitButton callback={handleClick}/>}
+                        {shouldDisplayPlayerName && <PlayerNameDisplay name={playerName.name}/>}
+                        {!shouldDisplayPlayerName && <PlayerNameSubmitButton callback={handleClick}/>}
                         {shouldDisplayRoom && <RoomDisplay roomID={roomID.roomID}/>}
                     </div>
                     {shouldDisplayCreateRoom && <CreateRoomButton callback={createRoomRequest}/>}
                     {shouldDisplayJoinRoom && <JoinRoom callback={joinRoomRequest}/>}
-                    {shouldDisplayRoom && <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/> }
-                    {shouldDisplay && <SignOutPlayerButton callback={clearName}/>}
+                    {shouldDisplayRoom && <RoundContainer playerName={playerName.name} roomID={roomID.roomID} roundNumber={roundNum.round}/>}
+                    {shouldDisplayWords &&
+                        <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/>}
+                    {shouldDisplayPlayerName && <SignOutPlayerButton callback={clearName}/>}
                 </div>
             </div>
         </div>
@@ -184,8 +189,8 @@ function JoinRoom(props: JoinRoomProps) {
         <input type="text" placeholder={"Enter your roomID"} id="room-name-input"/>
         <button type="submit"
                 onClick={() => {
-                   const roomID = (document.getElementById("room-name-input") as HTMLInputElement).value;
-                   props.callback(roomID);
+                    const roomID = (document.getElementById("room-name-input") as HTMLInputElement).value;
+                    props.callback(roomID);
                 }}>JoinRoom
         </button>
     </div>);
@@ -201,7 +206,7 @@ function PlayerNameDisplay(props: PlayerNameDisplayProps) {
         fontWeight: "20px",
     };
     return (<div>
-        <h3 style={stuff}>My Name is {props.name}</h3>
+        <h3 style={stuff}>CODENAME: {props.name}</h3>
     </div>)
 }
 
@@ -235,6 +240,45 @@ interface WordEntriesProp {
     secret_word: string,
     is_chameleon: boolean,
     category: string,
+}
+
+interface RoundContainerProps {
+    roundNumber: number
+    roomID: string
+    playerName: string
+}
+
+function RoundContainer(props: RoundContainerProps) {
+    const roundNumberSet = props.roundNumber > 0;
+    const roomID = props.roomID;
+    const playerNameStr = props.playerName
+    let players: string[] = [];
+
+    const roomInfoRequest = async () => {
+        const url = commonURL + "/room/" + roomID + "/";
+        let result: any = {};
+        try {
+            result = await makeRequest(url, {
+                method: 'GET',
+                headers: {
+                    'Access-Control-Allow-Origin': 'http://localhost:8080',
+                    'Access-Control-Allow-Methods': 'GET',
+                    'Content-Type': 'application/json',
+                    'X-Player': playerNameStr,
+                },
+            });
+        } catch (err) {
+            console.log(err);
+            return
+        }
+        players = result.players;
+        props.roundNumber = result.current_round;
+    }
+    setInterval(roomInfoRequest, 5000);
+
+    return (<div>
+        {players.length > 0 && <div>Players: {players.join(", ")}</div>}
+    </div>);
 }
 
 function WordEntries(props: WordEntriesProp) {
