@@ -1,5 +1,6 @@
 import './App.css';
 import {useState} from "react";
+import {Simulate} from "react-dom/test-utils";
 
 function App() {
     return (
@@ -56,6 +57,31 @@ function PlayerPage() {
         setRoomID({roomID: roomID});
     };
 
+    const joinRoomRequest = async (roomIDStr: string) => {
+        const url = commonURL + "/room/" + roomIDStr + "/";
+        let result: any = {};
+        console.log("will send" + JSON.stringify({player: playerNameStr}));
+        try {
+            result = await makeRequest(url, {
+                method: 'POST',
+                headers: {
+                    'Access-Control-Allow-Origin': 'http://localhost:8080',
+                    'Access-Control-Allow-Methods': 'POST',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({player: playerNameStr}),
+            });
+        } catch (err) {
+            console.log(err);
+            return
+        }
+        const success = result.message === "joined room";
+        if (success) {
+            sessionStorage.setItem("roomID", roomIDStr);
+            setRoomID({roomID: roomIDStr});
+        }
+    };
+
     const handleClick = () => {
         let name = (document.getElementById("name-input") as HTMLInputElement).value || "";
         sessionStorage.setItem("playerName", name);
@@ -77,10 +103,14 @@ function PlayerPage() {
         setRoomID({roomID: roomID});
     };
 
-    const shouldDisplay = Boolean(playerName.name);
-    const shouldDisplayRoom = Boolean(playerName.name) && roomID.roomID !== "";
-    const shouldDisplayCreateRoom = Boolean(roomID.roomID === "");
-    const shouldDisplayJoinRoom = Boolean(roomID.roomID === "" && playerName.name);
+    const playerNameSet = Boolean(playerName.name);
+    const roomIDSet = Boolean(roomID.roomID);
+    const playerNotInARoom = playerNameSet && !roomIDSet;
+
+    const shouldDisplay = playerNameSet;
+    const shouldDisplayRoom = playerNameSet && roomIDSet;
+    const shouldDisplayCreateRoom = playerNotInARoom;
+    const shouldDisplayJoinRoom = playerNotInARoom;
 
     const words: string[] = [
         "Pizza",
@@ -115,7 +145,7 @@ function PlayerPage() {
                         {shouldDisplayRoom && <RoomDisplay roomID={roomID.roomID}/>}
                     </div>
                     {shouldDisplayCreateRoom && <CreateRoomButton callback={createRoomRequest}/>}
-                    {shouldDisplayJoinRoom && <JoinRoom callback={createRoomRequest}/>}
+                    {shouldDisplayJoinRoom && <JoinRoom callback={joinRoomRequest}/>}
                     {shouldDisplayRoom && <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/> }
                     {shouldDisplay && <SignOutPlayerButton callback={clearName}/>}
                 </div>
@@ -146,14 +176,17 @@ function CreateRoomButton(props: CreateRoomProps) {
 }
 
 interface JoinRoomProps {
-    callback: () => {}
+    callback: (roomID: string) => {}
 }
 
 function JoinRoom(props: JoinRoomProps) {
     return (<div id="room-name-button">
         <input type="text" placeholder={"Enter your roomID"} id="room-name-input"/>
         <button type="submit"
-                onClick={props.callback}>JoinRoom
+                onClick={() => {
+                   const roomID = (document.getElementById("room-name-input") as HTMLInputElement).value;
+                   props.callback(roomID);
+                }}>JoinRoom
         </button>
     </div>);
 }
@@ -168,7 +201,7 @@ function PlayerNameDisplay(props: PlayerNameDisplayProps) {
         fontWeight: "20px",
     };
     return (<div>
-        <h3 style={stuff}>{props.name}</h3>
+        <h3 style={stuff}>My Name is {props.name}</h3>
     </div>)
 }
 
