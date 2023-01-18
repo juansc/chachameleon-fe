@@ -20,6 +20,10 @@ function useSessionValue<T>(key: string, defaultValue: T): [T, (value: T) => voi
                 // Get from session storage by key
                 const item = sessionStorage.getItem(key);
                 // Parse stored json or if none return initialValue
+                if (key === "lastUpdateTs") {
+                    console.log("last update ts" + item);
+                    console.log("last update ts parsed" +  JSON.parse(item || ""));
+                }
                 return item ? JSON.parse(item) : defaultValue;
             } catch (error) {
                 return defaultValue;
@@ -51,11 +55,20 @@ function PlayerPage() {
     const [playerName, setPlayerName] = useSessionValue("playerName", "");
     const [roomID, setRoomID] = useSessionValue("roomID", "");
     const [roundNum, setRoundNum] = useSessionValue("roundNum", 0);
+    const [lastUpdateTsVar, setLastUpdateTs] = useSessionValue("lastUpdateTs", "");
+    console.log("\n\n");
+    console.log("BEGIN RENDERING PLAYER PAGE");
+    console.log("VALUES")
+    console.log("playerName: " + playerName);
+    console.log("roomID: " + roomID.toString());
+    console.log("roundNum: " + roundNum.toString());
+    console.log("lastUpdate: " + lastUpdateTsVar);
+    console.log("END VALUES")
+    console.log("LAST UPDATE TS: " + lastUpdateTsVar);
 
     const createRoomRequest = async () => {
         const url = `${commonURL}/room`
         let result: any = {};
-        console.log("will send" + JSON.stringify({player: playerName}));
         try {
             result = await makeRequest(url, {
                 method: 'POST',
@@ -71,14 +84,12 @@ function PlayerPage() {
             return
         }
         const roomID = result.room_id || "";
-        console.log("Got roomID: " + roomID);
         setRoomID(roomID);
     };
 
     const joinRoomRequest = async (roomIDStr: string) => {
         const url = `${commonURL}/room/${roomIDStr}/`
         let result: any = {};
-        console.log("will send" + JSON.stringify({player: playerName}));
         try {
             result = await makeRequest(url, {
                 method: 'POST',
@@ -108,6 +119,7 @@ function PlayerPage() {
         setPlayerName("");
         setRoomID("");
         setRoundNum(0);
+        setLastUpdateTs("");
     };
 
     const joinRoom = () => {
@@ -115,9 +127,11 @@ function PlayerPage() {
         setRoomID(roomID);
     };
 
-    const roomInfoRequest = async (playerName: string, roomID: string) => {
+    const roomInfoRequest = async (playerName: string, roomID: string, lastTs: string, id : number) => {
         const url = `${commonURL}/room/${roomID}/`
         let result: any = {};
+        console.log("X-Last-Update: " + lastTs);
+        console.log("id: " + id.toString());
         try {
             result = await makeRequest(url, {
                 method: 'GET',
@@ -126,14 +140,18 @@ function PlayerPage() {
                     'Access-Control-Allow-Methods': 'GET',
                     'Content-Type': 'application/json',
                     'X-Player': playerName,
+                    'X-Last-Update': lastTs,
                 },
             });
         } catch (err) {
             console.log(err);
             return
         }
-        console.log("Got response, the current round is ", result.current_round)
+        console.log("Got response, the last update is ", result.last_update)
         setRoundNum(result.current_round);
+        setLastUpdateTs(result.last_update);
+        console.log("Last update time was set to: " + result.last_update);
+        console.log("Expect a rerender now")
     };
 
     const playerNameSet = Boolean(playerName);
@@ -169,6 +187,8 @@ function PlayerPage() {
         "Chocolate",
         "Beef",
     ];
+    console.log("finished declaring words")
+    console.log("\n\n")
 
     return (
         <div id={"container"}>
@@ -183,7 +203,7 @@ function PlayerPage() {
                     {shouldDisplayCreateRoom && <CreateRoomButton onClick={createRoomRequest}/>}
                     {shouldDisplayJoinRoom && <JoinRoom callback={joinRoomRequest}/>}
                     {shouldDisplayRoom &&
-                        <RoundContainer playerName={playerName} roomID={roomID} roundNumber={roundNum}
+                        <RoundContainer playerName={playerName} roomID={roomID} roundNumber={roundNum} lastUpdateTs={lastUpdateTsVar}
                                         roundRequestFn={roomInfoRequest}/>}
                     {shouldDisplayWords &&
                         <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/>}
@@ -241,18 +261,25 @@ interface RoundContainerProps {
     roundNumber: number
     roomID: string
     playerName: string
-    roundRequestFn: (roomID: string, playerName: string) => void
+    roundRequestFn: (roomID: string, playerName: string, lastUpdateTs: string, id : number) => void
+    lastUpdateTs: string
 }
 
 function RoundContainer(props: RoundContainerProps) {
     const roomID = props.roomID;
     const playerNameStr = props.playerName
-    let players: string[] = [];
+    const ts = props.lastUpdateTs;
+    const fn = props.roundRequestFn;
+    const id = Math.round(Math.random() * 10000);
+    let players: string[] = ["player"];
+    console.log("room_id="+ roomID);
+    console.log("player="+ playerNameStr);
+    console.log("ts="+ ts);
 
     useEffect(() => {
-        const interval = setInterval(props.roundRequestFn, 5000, playerNameStr, roomID);
-        return () => clearInterval(interval);
-    }, []);
+        const interval = setInterval(fn, 5000, playerNameStr, roomID, ts, id);
+        return () => {clearInterval(interval);};
+    }, [fn, playerNameStr, roomID, ts, id]);
 
     return (<div>
         {players.length > 0 && <div>Players: {players.join(", ")}</div>}
