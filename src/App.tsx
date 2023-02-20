@@ -1,5 +1,5 @@
 import './App.css';
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useState, useMemo} from "react";
 import {WordEntries} from "./components/WordEntries";
 import { CreateRoomButton } from './components/CreateRoomButton';
 import { RoomDisplay } from './components/RoomDisplay';
@@ -51,6 +51,15 @@ async function makeRequest(url: string, requestInfo: RequestInit) {
 
 const commonURL = "http://localhost:8080";
 
+class RequestManager {
+
+    // map[requestInfo] -> Set(Fallback)
+    // Caller grabs response
+    // requestInfo = URL + METHOD + params
+
+    // setCallback(requestKey, callback);
+};
+
 function PlayerPage() {
     const [playerName, setPlayerName] = useSessionValue("playerName", "");
     const [roomID, setRoomID] = useSessionValue("roomID", "");
@@ -65,6 +74,18 @@ function PlayerPage() {
     console.log("lastUpdate: " + lastUpdateTsVar);
     console.log("END VALUES")
     console.log("LAST UPDATE TS: " + lastUpdateTsVar);
+
+    const stateMgr = useMemo(() => {
+        return new StateManager(setPlayerName, setRoomID, setRoundNum);
+    }, [setPlayerName, setRoomID, setRoundNum]);
+
+    useEffect(() => {
+        return () => {
+            stateMgr.destroy()
+        }
+    }, [stateMgr]);
+
+    const myCallback = useCallback(() => {}, []);
 
     const createRoomRequest = async () => {
         const url = `${commonURL}/room`
@@ -265,6 +286,24 @@ interface RoundContainerProps {
     lastUpdateTs: string
 }
 
+
+enum DataType {
+    RoomUpdate = 'ROOM_UPDATE',
+    PlayerUpdate = 'PLAYER_UPDATE'
+}
+
+type Data =
+    { type: DataType.RoomUpdate, playerName: string, roomID: string } |
+    { type: DataType.PlayerUpdate, playerName: string };
+
+function subscribe(data: Data) {
+    switch (data.type) {
+        case DataType.RoomUpdate:
+            break;
+    }
+}
+
+
 function RoundContainer(props: RoundContainerProps) {
     const roomID = props.roomID;
     const playerNameStr = props.playerName
@@ -275,6 +314,11 @@ function RoundContainer(props: RoundContainerProps) {
     console.log("room_id="+ roomID);
     console.log("player="+ playerNameStr);
     console.log("ts="+ ts);
+
+    useEffect(() => {
+        stateManager.subscribe({type: DataType.RoomUpdate, playerNameStr, roomID} )
+    }, [stateManager, playerNameStr, roomID]);
+
 
     useEffect(() => {
         const interval = setInterval(fn, 5000, playerNameStr, roomID, ts, id);
