@@ -1,17 +1,31 @@
+import {Role, RoundInfo} from "../App";
+
 interface WordEntriesProp {
-    words: Array<string>;
-    secret_word: string,
-    is_chameleon: boolean,
-    category: string,
+    info: RoundInfo,
 }
 
 
 function WordEntries(props: WordEntriesProp) {
-    let chunks = chunkArray(props.words, 4);
+    const words = props.info.wordList;
+    const category = props.info.category;
+    const role = props.info.role;
+    let secretWord = "";
+    let isChameleon = false;
+
+    switch (role.type) {
+        case Role.IsChameleon:
+            isChameleon = true;
+            break;
+        case Role.KnowsSecret:
+            secretWord = role.word;
+            break;
+    }
+
+    let chunks = chunkArray(words, 4);
     return (
         <div>
             <table id={"words-table"}>
-                <caption style={{"color": "#03316d", "fontSize": "30px"}}>{props.category}</caption>
+                <caption style={{"color": "#03316d", "fontSize": "30px"}}>{category}</caption>
                 <tbody id={"words"}>
                 {chunks.map((row, ind) => {
                     return (
@@ -25,8 +39,8 @@ function WordEntries(props: WordEntriesProp) {
                 })}
                 </tbody>
             </table>
-            {props.secret_word !== "" && <h3>Secret Word: {props.secret_word}</h3>}
-            {props.is_chameleon && <h3>YOU ARE THE CHAMELEON</h3>}
+            {secretWord !== "" && <h3>Secret Word: {secretWord}</h3>}
+            {isChameleon && <h3>YOU ARE THE CHAMELEON</h3>}
         </div>
     );
 }

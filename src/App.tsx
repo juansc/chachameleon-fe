@@ -1,9 +1,10 @@
 import './App.css';
-import {useCallback, useEffect, useState, useMemo} from "react";
+import {useEffect, useMemo} from "react";
 import {WordEntries} from "./components/WordEntries";
-import { CreateRoomButton } from './components/CreateRoomButton';
-import { RoomDisplay } from './components/RoomDisplay';
-import { PlayerNameDisplay } from './components/PlayerNameDisplay';
+import {CreateRoomButton} from './components/CreateRoomButton';
+import {RoomDisplay} from './components/RoomDisplay';
+import {PlayerNameDisplay} from './components/PlayerNameDisplay';
+import {useSessionValue} from "./utils";
 
 function App() {
     return (
@@ -13,29 +14,6 @@ function App() {
     );
 }
 
-// useSessionValue
-function useSessionValue<T>(key: string, defaultValue: T): [T, (value: T) => void] {
-    const [value, setValue] = useState<T>(() => {
-            try {
-                // Get from session storage by key
-                const item = sessionStorage.getItem(key);
-                // Parse stored json or if none return initialValue
-                if (key === "lastUpdateTs") {
-                    console.log("last update ts" + item);
-                    console.log("last update ts parsed" +  JSON.parse(item || ""));
-                }
-                return item ? JSON.parse(item) : defaultValue;
-            } catch (error) {
-                return defaultValue;
-            }
-        }
-    );
-
-    useEffect(() => {
-        sessionStorage.setItem(key, JSON.stringify(value));
-    }, [value]);
-    return [value, setValue];
-}
 
 async function makeRequest(url: string, requestInfo: RequestInit) {
     const resp = await fetch(url, requestInfo);
@@ -45,26 +23,178 @@ async function makeRequest(url: string, requestInfo: RequestInit) {
     return await resp.json();
 }
 
-/*
-* Whenever a value is changed, we will update the session storage.
-* */
-
 const commonURL = "http://localhost:8080";
 
 class RequestManager {
+    setPlayerName: (name: string) => void;
+    setRoomID: (val: string) => void;
+    setRoundNum: (num: number) => void;
+    setLastUpdateTs: (ts: string) => void;
 
+    constructor(setPlayer: (name: string) => void, setRoomID: (name: string) => void, setRound: (num: number) => void, setLastTs: (name: string) => void) {
+        this.setPlayerName = setPlayer;
+        this.setRoomID = setRoomID;
+        this.setRoundNum = setRound;
+        this.setLastUpdateTs = setLastTs;
+    }
+
+    createRoomRequest(playerName: string) {
+        console.log(`Creating room request callback for ${playerName}`)
+        return async () => {
+            console.log(`Executing room request callback for ${playerName}`)
+            const url = `${commonURL}/room`
+            let result: any = {};
+            try {
+                result = await makeRequest(url, {
+                    method: 'POST',
+                    headers: {
+                        'Access-Control-Allow-Origin': 'http://localhost:8080',
+                        'Access-Control-Allow-Methods': 'POST',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({player: playerName}),
+                });
+            } catch (err) {
+                console.log(err);
+                return
+            }
+            const roomID = result.room_id || "";
+            this.setRoomID(roomID);
+        }
+    }
+
+    destroy() {
+        console.log("I am destroyed")
+    }
+
+    joinRoomRequest(playerName: string, roomID: string) {
+        return async () => {
+            const url = `${commonURL}/room/${roomID}/`
+            let result: any = {};
+            try {
+                result = await makeRequest(url, {
+                    method: 'POST',
+                    headers: {
+                        'Access-Control-Allow-Origin': 'http://localhost:8080',
+                        'Access-Control-Allow-Methods': 'POST',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({player: playerName}),
+                });
+            } catch (err) {
+                console.log(err);
+                return
+            }
+            const success = result.message === "joined room";
+            if (success) {
+                this.setRoomID(roomID);
+            }
+        }
+    }
+
+    resetState() {
+        return () => {
+            this.setPlayerName("");
+            this.setRoomID("");
+            this.setRoundNum(0);
+            this.setLastUpdateTs("");
+        }
+    }
+
+    // This is the only function that should have any kind of polling, since it's possible to get the exact
+    // same response we got last time, and this should continue until it gets cancelled.
+    roomInfoRequest = async (playerName: string, roomID: string, lastTs: string) => {
+        return async () => {
+            const url = `${commonURL}/room/${roomID}/`;
+            let result: any = {};
+            console.log("X-Last-Update: " + lastTs);
+            try {
+                result = await makeRequest(url, {
+                    method: 'GET',
+                    headers: {
+                        'Access-Control-Allow-Origin': 'http://localhost:8080',
+                        'Access-Control-Allow-Methods': 'GET',
+                        'Content-Type': 'application/json',
+                        'X-Player': playerName,
+                        'X-Last-Update': lastTs,
+                    },
+                });
+            } catch (err) {
+                console.log(err);
+                return
+            }
+            console.log("Got response, the last update is ", result.last_update)
+            this.setRoundNum(result.current_round);
+            this.setLastUpdateTs(result.last_update);
+            console.log("Last update time was set to: " + result.last_update);
+            console.log("Expect a rerender now")
+        };
+    };
+
+    // Expose my list of requests, and then this thing will call all the callbacks to update them!
     // map[requestInfo] -> Set(Fallback)
     // Caller grabs response
     // requestInfo = URL + METHOD + params
 
     // setCallback(requestKey, callback);
-};
+}
+
+/*
+// Goals for MVP
+1. Two people can connect to the same room. One must be a chameleon and the other a regular player.
+2. Words can be retrieved from the backend and displayed.
+3. A room can display the players that are present.
+4. A room can be reset to return new words and new chameleons.
+ */
+
+class RoundInfo {
+    wordList: Array<string>;
+    role: PlayerRole;
+    category: string;
+
+    constructor(role: PlayerRole, category: string, wordList: Array<string>) {
+        this.category = category;
+        this.role = role;
+        this.wordList = wordList;
+    }
+}
+
+export {RoundInfo};
+
+enum Role {
+    Unset = 'UNSET',
+    KnowsSecret = 'KNOWS_SECRET',
+    IsChameleon = 'CHAMELEON'
+}
+
+export {Role};
+
+type PlayerRole =
+    { type: Role.Unset } |
+    { type: Role.KnowsSecret, word: string } |
+    { type: Role.IsChameleon };
+
+
+function UnsetRole(): PlayerRole {
+    return {type: Role.Unset}
+}
+
+function SecretWordRole(word: string): PlayerRole {
+    return {type: Role.KnowsSecret, word: word}
+}
+
+function ChameleonRole(): PlayerRole {
+    return {type: Role.IsChameleon}
+}
 
 function PlayerPage() {
     const [playerName, setPlayerName] = useSessionValue("playerName", "");
     const [roomID, setRoomID] = useSessionValue("roomID", "");
     const [roundNum, setRoundNum] = useSessionValue("roundNum", 0);
     const [lastUpdateTsVar, setLastUpdateTs] = useSessionValue("lastUpdateTs", "");
+    const [playerList, setPlayerList] = useSessionValue("playerList", []);
+    const [wordList, setWordList] = useSessionValue("wordList", []);
+    const [playerRole, setPlayerRole] = useSessionValue("playerRole", UnsetRole())
     console.log("\n\n");
     console.log("BEGIN RENDERING PLAYER PAGE");
     console.log("VALUES")
@@ -76,8 +206,8 @@ function PlayerPage() {
     console.log("LAST UPDATE TS: " + lastUpdateTsVar);
 
     const stateMgr = useMemo(() => {
-        return new StateManager(setPlayerName, setRoomID, setRoundNum);
-    }, [setPlayerName, setRoomID, setRoundNum]);
+        return new RequestManager(setPlayerName, setRoomID, setRoundNum, setLastUpdateTs);
+    }, [setPlayerName, setRoomID, setRoundNum, setLastUpdateTs]);
 
     useEffect(() => {
         return () => {
@@ -85,94 +215,9 @@ function PlayerPage() {
         }
     }, [stateMgr]);
 
-    const myCallback = useCallback(() => {}, []);
-
-    const createRoomRequest = async () => {
-        const url = `${commonURL}/room`
-        let result: any = {};
-        try {
-            result = await makeRequest(url, {
-                method: 'POST',
-                headers: {
-                    'Access-Control-Allow-Origin': 'http://localhost:8080',
-                    'Access-Control-Allow-Methods': 'POST',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({player: playerName}),
-            });
-        } catch (err) {
-            console.log(err);
-            return
-        }
-        const roomID = result.room_id || "";
-        setRoomID(roomID);
-    };
-
-    const joinRoomRequest = async (roomIDStr: string) => {
-        const url = `${commonURL}/room/${roomIDStr}/`
-        let result: any = {};
-        try {
-            result = await makeRequest(url, {
-                method: 'POST',
-                headers: {
-                    'Access-Control-Allow-Origin': 'http://localhost:8080',
-                    'Access-Control-Allow-Methods': 'POST',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({player: playerName}),
-            });
-        } catch (err) {
-            console.log(err);
-            return
-        }
-        const success = result.message === "joined room";
-        if (success) {
-            setRoomID(roomIDStr);
-        }
-    };
-
     const handleClick = () => {
         let name = (document.getElementById("name-input") as HTMLInputElement).value || "";
         setPlayerName(name);
-    };
-
-    const clearName = () => {
-        setPlayerName("");
-        setRoomID("");
-        setRoundNum(0);
-        setLastUpdateTs("");
-    };
-
-    const joinRoom = () => {
-        let roomID = (document.getElementById("room-name-input") as HTMLInputElement).value;
-        setRoomID(roomID);
-    };
-
-    const roomInfoRequest = async (playerName: string, roomID: string, lastTs: string, id : number) => {
-        const url = `${commonURL}/room/${roomID}/`
-        let result: any = {};
-        console.log("X-Last-Update: " + lastTs);
-        console.log("id: " + id.toString());
-        try {
-            result = await makeRequest(url, {
-                method: 'GET',
-                headers: {
-                    'Access-Control-Allow-Origin': 'http://localhost:8080',
-                    'Access-Control-Allow-Methods': 'GET',
-                    'Content-Type': 'application/json',
-                    'X-Player': playerName,
-                    'X-Last-Update': lastTs,
-                },
-            });
-        } catch (err) {
-            console.log(err);
-            return
-        }
-        console.log("Got response, the last update is ", result.last_update)
-        setRoundNum(result.current_round);
-        setLastUpdateTs(result.last_update);
-        console.log("Last update time was set to: " + result.last_update);
-        console.log("Expect a rerender now")
     };
 
     const playerNameSet = Boolean(playerName);
@@ -208,8 +253,6 @@ function PlayerPage() {
         "Chocolate",
         "Beef",
     ];
-    console.log("finished declaring words")
-    console.log("\n\n")
 
     return (
         <div id={"container"}>
@@ -221,14 +264,14 @@ function PlayerPage() {
                         {!shouldDisplayPlayerName && <PlayerNameSubmitButton onClick={handleClick}/>}
                         {shouldDisplayRoom && <RoomDisplay roomID={roomID}/>}
                     </div>
-                    {shouldDisplayCreateRoom && <CreateRoomButton onClick={createRoomRequest}/>}
-                    {shouldDisplayJoinRoom && <JoinRoom callback={joinRoomRequest}/>}
+                    {shouldDisplayCreateRoom && <CreateRoomButton onClick={stateMgr.createRoomRequest(playerName)}/>}
+                    {shouldDisplayJoinRoom && <JoinRoom callback={stateMgr.joinRoomRequest(playerName, roomID)}/>}
                     {shouldDisplayRoom &&
-                        <RoundContainer playerName={playerName} roomID={roomID} roundNumber={roundNum} lastUpdateTs={lastUpdateTsVar}
-                                        roundRequestFn={roomInfoRequest}/>}
+                        <RoundContainer playerName={playerName} roomID={roomID} roundNumber={roundNum}
+                                        lastUpdateTs={lastUpdateTsVar}/>}
                     {shouldDisplayWords &&
                         <WordEntries words={words} secret_word={"Beef"} is_chameleon={true} category={"Food"}/>}
-                    {shouldDisplayPlayerName && <SignOutPlayerButton onClick={clearName}/>}
+                    {shouldDisplayPlayerName && <SignOutPlayerButton onClick={stateMgr.resetState()}/>}
                 </div>
             </div>
         </div>
@@ -282,7 +325,6 @@ interface RoundContainerProps {
     roundNumber: number
     roomID: string
     playerName: string
-    roundRequestFn: (roomID: string, playerName: string, lastUpdateTs: string, id : number) => void
     lastUpdateTs: string
 }
 
@@ -308,22 +350,25 @@ function RoundContainer(props: RoundContainerProps) {
     const roomID = props.roomID;
     const playerNameStr = props.playerName
     const ts = props.lastUpdateTs;
-    const fn = props.roundRequestFn;
     const id = Math.round(Math.random() * 10000);
     let players: string[] = ["player"];
-    console.log("room_id="+ roomID);
-    console.log("player="+ playerNameStr);
-    console.log("ts="+ ts);
+    console.log("room_id=" + roomID);
+    console.log("player=" + playerNameStr);
+    console.log("ts=" + ts);
 
+    /*
     useEffect(() => {
-        stateManager.subscribe({type: DataType.RoomUpdate, playerNameStr, roomID} )
+        stateManager.subscribe({type: DataType.RoomUpdate, playerNameStr, roomID})
     }, [stateManager, playerNameStr, roomID]);
 
 
     useEffect(() => {
         const interval = setInterval(fn, 5000, playerNameStr, roomID, ts, id);
-        return () => {clearInterval(interval);};
+        return () => {
+            clearInterval(interval);
+        };
     }, [fn, playerNameStr, roomID, ts, id]);
+     */
 
     return (<div>
         {players.length > 0 && <div>Players: {players.join(", ")}</div>}
